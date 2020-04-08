@@ -14,6 +14,10 @@ public:
         int term;
     };
 
+    struct SetCluster {
+        std::vector<so_5::mbox_t> mboxes;
+    };
+
     raft_server(context_t ctx) : so_5::agent_t{std::move(ctx)} {
         server_state.activate();
     }
@@ -25,7 +29,9 @@ public:
         m_election_timeout = dist(rng);
         std::cout << m_election_timeout << std::endl;
 
-        //server_state.event(&raft_server::request_handler);
+        server_state.event([this](mhood_t<SetCluster> sc) {
+            m_mboxes = sc->mboxes;
+        });
 
         candidate.event([this](mhood_t<change_state>) {
             std::random_device dev;
@@ -35,6 +41,7 @@ public:
             std::cout << m_election_timeout << std::endl;
 
             std::cout << "candidate" << std::endl;
+            std::cout << m_mboxes.size() << std::endl;
 
 
         })
@@ -42,8 +49,8 @@ public:
 
         follower.event([this](mhood_t<change_state>) {
             follower.time_limit(std::chrono::milliseconds{m_election_timeout}, candidate);
-
             std::cout << "follower" << std::endl;
+            std::cout << m_mboxes.size() << std::endl;
         })
         .event(&raft_server::request_handler);
 

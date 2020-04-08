@@ -17,7 +17,9 @@ int main() {
             mboxes.push_back(test2->so_direct_mbox());
         });
 
+
         for (auto el : mboxes) {
+            so_5::send<raft_server::SetCluster>(el, mboxes);
             so_5::send<raft_server::change_state>(el);
         }
     });
