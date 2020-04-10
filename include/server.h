@@ -52,7 +52,7 @@ public:
             candidate.time_limit(std::chrono::milliseconds{m_election_timeout}, candidate);
             for (auto el : m_mboxes) {
                 std::cout << el.first << std::endl;
-                so_5::send<raft_server::RequestVote>(el.second, el.first);
+                so_5::send<raft_server::RequestVote>(el.second, m_name);
             }
 
         })
@@ -62,7 +62,8 @@ public:
             follower.time_limit(std::chrono::milliseconds{m_election_timeout}, candidate);
             std::cout << "follower" << std::endl;
         })
-        .event(&raft_server::heartbeat_handler);
+        .event(&raft_server::heartbeat_handler)
+        .event(&raft_server::candidate_request_vote_handler);
 
         leader.event([this](mhood_t<raft_server::change_state>) {
 
@@ -128,7 +129,7 @@ private:
         } else {
             for (auto el : m_mboxes) {
                 if (el.first == rv->name) {
-                    so_5::send<raft_server::RequestVote>(el.second);
+                    so_5::send<raft_server::RequestVote>(el.second, el.first);
                     break;
                 }
             }
@@ -137,6 +138,6 @@ private:
         if (m_vote_cnt > ceil(m_mboxes.size() / 2.0)) {
             leader.activate();
         }
-        std::cout << m_vote_cnt << std::endl;
+        std::cout << m_name << ": " << m_vote_cnt << std::endl;
     }
 };
