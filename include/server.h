@@ -33,7 +33,6 @@ public:
         std::mt19937 rng(dev());
         std::uniform_int_distribution dist(150, 300);
         m_election_timeout = dist(rng);
-        std::cout << m_election_timeout << std::endl;
 
         //**********************************************************************
         // this event is used to get the current list of servers
@@ -43,29 +42,45 @@ public:
             m_mboxes = sc->mboxes;
         });
 
-        candidate.event([this](mhood_t<raft_server::change_state>) {
+
+        candidate.on_enter([this] {
+            m_vote_cnt = 0;
+            std::cout << "start of candidate" << std::endl;
+            so_5::send<raft_server::change_state>(*this);
+        })
+        .event([this](mhood_t<raft_server::change_state>) {
             std::random_device dev;
             std::mt19937 rng(dev());
             std::uniform_int_distribution dist(150, 300);
             m_election_timeout = dist(rng);
-            std::cout << m_election_timeout << std::endl;
 
             std::cout << "candidate" << std::endl;
             ++m_term;
 
-            //refresh of candidate state
+            //**********************************************************************
+            //transition to candidate state if the election timeout kicks in
+            //**********************************************************************
             candidate.time_limit(std::chrono::milliseconds{m_election_timeout},
               candidate);
             
+            //******************************************************************
+            //sends RequestVote to every server in the cluster. Even itself.
+            //the vote count gets incremented in the vote handler.
+            //******************************************************************
             for (auto el : m_mboxes) {
-                std::cout << el.first << std::endl;
                 so_5::send<raft_server::RequestVote>(el.second, m_name);
             }
 
         })
         .event(&raft_server::request_vote_handler);
 
-        follower.event([this](mhood_t<raft_server::change_state>) {
+
+        follower.on_enter([this] {
+            std::cout << "start of follower" << std::endl;
+            m_vote_cnt = 0;
+            so_5::send<raft_server::change_state>(*this);
+        })
+        .event([this](mhood_t<raft_server::change_state>) {
             follower.time_limit(std::chrono::milliseconds{m_election_timeout},
               candidate);
             std::cout << "follower" << std::endl;
@@ -73,32 +88,17 @@ public:
         .event(&raft_server::heartbeat_handler)
         .event(&raft_server::request_vote_handler);
 
-        leader.event([this](mhood_t<raft_server::change_state>) {
-
-            std::cout << m_name << ": leader" << std::endl;
-            //timer wird bei neuaufruf zurückgesetzt
-            leader.activate();
-            send_heartbeat();
-        })
-        .event(&raft_server::heartbeat_handler);
-
-        candidate.on_enter([this] {
-            m_vote_cnt = 0;
-            std::cout << "start of candidate" << std::endl;
-            so_5::send<raft_server::change_state>(*this);
-        });
-
-        follower.on_enter([this] {
-            std::cout << "start of follower" << std::endl;
-            m_vote_cnt = 0;
-            so_5::send<raft_server::change_state>(*this);
-        });
 
         leader.on_enter([this] {
             std::cout << "start of leader" << std::endl;
             m_vote_cnt = 0;
             so_5::send<raft_server::change_state>(*this);
-        });
+        })
+        .event([this](mhood_t<raft_server::change_state>) {
+            std::cout << m_name << ": leader" << std::endl;
+            send_heartbeat();
+        })
+        .event(&raft_server::heartbeat_handler);
     }
 private:
     
@@ -129,6 +129,7 @@ private:
         if (ae->status == 0 && ae->term >= m_term) {
             follower.activate();
             m_vote_cnt = 0;
+            m_term = ae->term;
             follower.time_limit(std::chrono::milliseconds{m_election_timeout}, candidate);
         }
     }
