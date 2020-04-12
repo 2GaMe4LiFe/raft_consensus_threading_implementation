@@ -126,7 +126,7 @@ private:
     }
 
     void heartbeat_handler(mhood_t<raft_server::AppendEntry> ae) {
-        if (ae->status == 0) {
+        if (ae->status == 0 && ae->term >= m_term) {
             follower.activate();
             m_vote_cnt = 0;
             follower.time_limit(std::chrono::milliseconds{m_election_timeout}, candidate);
