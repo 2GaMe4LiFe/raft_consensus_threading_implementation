@@ -23,7 +23,8 @@ public:
         std::unordered_map<std::string, so_5::mbox_t> mboxes;
     };
 
-    raft_server(context_t ctx, std::string name) : so_5::agent_t{std::move(ctx)}, m_name{name} {
+    raft_server(context_t ctx, std::string name) 
+        : so_5::agent_t{std::move(ctx)}, m_name{name} {
         server_state.activate();
     }
 
@@ -34,6 +35,10 @@ public:
         m_election_timeout = dist(rng);
         std::cout << m_election_timeout << std::endl;
 
+        //**********************************************************************
+        // this event is used to get the current list of servers
+        // must be done before the first leader election
+        //**********************************************************************
         server_state.event([this](mhood_t<raft_server::SetCluster> sc) {
             m_mboxes = sc->mboxes;
         });
@@ -49,42 +54,31 @@ public:
             ++m_term;
 
             //refresh of candidate state
-            candidate.time_limit(std::chrono::milliseconds{m_election_timeout}, candidate);
+            candidate.time_limit(std::chrono::milliseconds{m_election_timeout},
+              candidate);
+            
             for (auto el : m_mboxes) {
                 std::cout << el.first << std::endl;
                 so_5::send<raft_server::RequestVote>(el.second, m_name);
             }
 
         })
-        .event(&raft_server::candidate_request_vote_handler);
+        .event(&raft_server::request_vote_handler);
 
         follower.event([this](mhood_t<raft_server::change_state>) {
-            follower.time_limit(std::chrono::milliseconds{m_election_timeout}, candidate);
+            follower.time_limit(std::chrono::milliseconds{m_election_timeout},
+              candidate);
             std::cout << "follower" << std::endl;
         })
         .event(&raft_server::heartbeat_handler)
-        .event(&raft_server::candidate_request_vote_handler);
+        .event(&raft_server::request_vote_handler);
 
         leader.event([this](mhood_t<raft_server::change_state>) {
 
             std::cout << m_name << ": leader" << std::endl;
             //timer wird bei neuaufruf zurückgesetzt
             leader.activate();
-            
-            for (int i{0}; i < 100; i++) {
-                std::this_thread::sleep_for(std::chrono::milliseconds{50});
-                for (auto el : m_mboxes) {
-                    if (el.first != m_name)
-                        so_5::send<raft_server::AppendEntry>(el.second, m_term, 0);
-                }
-            }
-
-            /*while (true) {
-                std::this_thread::sleep_for(std::chrono::milliseconds{50});
-                for (auto el : m_mboxes) {
-                    so_5::send<raft_server::AppendEntry>(el.second, m_term, 0);
-                }
-            }*/
+            send_heartbeat();
         })
         .event(&raft_server::heartbeat_handler);
 
@@ -121,30 +115,35 @@ private:
     std::string m_name;
     std::unordered_map<std::string, so_5::mbox_t> m_mboxes;
 
+    void send_heartbeat() {
+        while (true) {
+            std::this_thread::sleep_for(std::chrono::milliseconds{50});
+            for (auto el : m_mboxes) {
+                if (el.first != m_name)
+                    so_5::send<raft_server::AppendEntry>(el.second, m_term, 0);
+            }
+        }
+    }
+
     void heartbeat_handler(mhood_t<raft_server::AppendEntry> ae) {
         if (ae->status == 0) {
             follower.activate();
+            m_vote_cnt = 0;
             follower.time_limit(std::chrono::milliseconds{m_election_timeout}, candidate);
         }
     }
 
-    void candidate_request_vote_handler(mhood_t<raft_server::RequestVote> rv) {
+    void request_vote_handler(mhood_t<raft_server::RequestVote> rv) {
 
         if (rv->name == m_name) {
             ++m_vote_cnt;
         } else {
-            for (auto el : m_mboxes) {
-                if (el.first == rv->name) {
-                    so_5::send<raft_server::RequestVote>(el.second, el.first);
-                    break;
-                }
-            }
+            so_5::send<raft_server::RequestVote>(m_mboxes[rv->name], rv->name);
         }
 
         if (m_vote_cnt > ceil(m_mboxes.size() / 2.0)) {
             m_vote_cnt = 0;
             leader.activate();
         }
-        std::cout << m_name << ": " << m_vote_cnt << std::endl;
     }
 };
