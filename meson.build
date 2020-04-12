@@ -4,8 +4,7 @@ project('raft_sobjects', 'cpp',
 thread_dep = dependency('threads')
 src = ['src/main.cpp']
 
-inc_dir = include_directories(['include',
-								get_option('sobjectizer_include_dir')])
+inc_dir = include_directories(['include'])
 
 lib_sobj = meson.get_compiler('cpp').find_library('so.5.7.0',
     dirs : ['/usr/lib'])
