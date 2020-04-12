@@ -70,13 +70,23 @@ public:
             std::cout << m_name << ": leader" << std::endl;
             //timer wird bei neuaufruf zurückgesetzt
             leader.activate();
-            while (true) {
+            
+            for (int i{0}; i < 100; i++) {
+                std::this_thread::sleep_for(std::chrono::milliseconds{50});
+                for (auto el : m_mboxes) {
+                    if (el.first != m_name)
+                        so_5::send<raft_server::AppendEntry>(el.second, m_term, 0);
+                }
+            }
+
+            /*while (true) {
                 std::this_thread::sleep_for(std::chrono::milliseconds{50});
                 for (auto el : m_mboxes) {
                     so_5::send<raft_server::AppendEntry>(el.second, m_term, 0);
                 }
-            }
-        });
+            }*/
+        })
+        .event(&raft_server::heartbeat_handler);
 
         candidate.on_enter([this] {
             m_vote_cnt = 0;
@@ -118,10 +128,6 @@ private:
         }
     }
 
-    void request_handler(mhood_t<raft_server::RequestVote> rv) {
-        std::cout << rv->name << std::endl;
-    }
-
     void candidate_request_vote_handler(mhood_t<raft_server::RequestVote> rv) {
 
         if (rv->name == m_name) {
@@ -136,6 +142,7 @@ private:
         }
 
         if (m_vote_cnt > ceil(m_mboxes.size() / 2.0)) {
+            m_vote_cnt = 0;
             leader.activate();
         }
         std::cout << m_name << ": " << m_vote_cnt << std::endl;
