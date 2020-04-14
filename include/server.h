@@ -12,6 +12,7 @@ public:
 
     struct RequestVote {
         std::string name;
+        int term;
     };
 
     struct AppendEntry {
@@ -139,7 +140,8 @@ private:
         if (rv->name == m_name) {
             ++m_vote_cnt;
         } else {
-            so_5::send<raft_server::RequestVote>(m_mboxes[rv->name], rv->name);
+            if (rv->term >= m_term)
+                so_5::send<raft_server::RequestVote>(m_mboxes[rv->name], rv->name, rv->term);
         }
 
         if (m_vote_cnt > ceil(m_mboxes.size() / 2.0)) {
