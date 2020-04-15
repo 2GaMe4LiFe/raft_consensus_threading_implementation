@@ -3,6 +3,7 @@
 #include <vector>
 #include <unordered_map>
 #include "server.h"
+#include "client.h"
 
 using namespace std;
 
@@ -22,13 +23,16 @@ int main() {
             mboxes["server4"] = server4->so_direct_mbox();
             auto server5 = coop.make_agent<raft_server>("server5");
             mboxes["server5"] = server5->so_direct_mbox();
+
+            client_inbox = coop.make_agent<Client>()->so_direct_mbox();
         });
 
-
         for (auto el : mboxes) {
-            so_5::send<raft_server::SetCluster>(el.second, mboxes);
+            so_5::send<SetCluster>(el.second, mboxes);
             so_5::send<raft_server::change_state>(el.second);
         }
+
+        so_5::send<SetCluster>(client_inbox, mboxes);
 
         //this_thread::sleep_for(chrono::milliseconds{2000});
         //so_5::send<ClientRequest>(client_inbox, "hello world");

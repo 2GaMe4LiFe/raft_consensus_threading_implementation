@@ -12,8 +12,14 @@ struct ClientRequest {
 };
 
 struct ServerResponse {
+    int status; // 0 or 1 if 0 then request answered by follower
     std::string resp;
-}
+    std::string leader;
+};
+
+struct SetCluster {
+    std::unordered_map<std::string, so_5::mbox_t> mboxes;
+};
 
 class raft_server final : public so_5::agent_t {
 public:
@@ -32,10 +38,6 @@ public:
         int status{0};
     };
 
-    struct SetCluster {
-        std::unordered_map<std::string, so_5::mbox_t> mboxes;
-    };
-
     raft_server(context_t ctx, std::string name) 
         : so_5::agent_t{std::move(ctx)}, m_name{name} {
         server_state.activate();
@@ -51,7 +53,7 @@ public:
         // this event is used to get the current list of servers
         // must be done before the first leader election
         //**********************************************************************
-        server_state.event([this](mhood_t<raft_server::SetCluster> sc) {
+        server_state.event([this](mhood_t<SetCluster> sc) {
             m_mboxes = sc->mboxes;
         });
 
@@ -135,7 +137,7 @@ private:
             std::this_thread::sleep_for(std::chrono::milliseconds{50});
             for (auto el : m_mboxes) {
                 if (el.first != m_name)
-                    so_5::send<raft_server::AppendEntry>(m_name, el.second, m_term, 0);
+                    so_5::send<raft_server::AppendEntry>(el.second, m_name, m_term, 0);
             }
         }
     }
