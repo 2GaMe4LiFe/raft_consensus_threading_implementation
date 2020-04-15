@@ -8,8 +8,8 @@ using namespace std;
 
 int main() {
     so_5::launch([](so_5::environment_t& env) {
-        so_5::mbox_t m;
-        so_5::mbox_t m2;
+        so_5::mbox_t client_inbox;
+
         unordered_map<string, so_5::mbox_t> mboxes;
         env.introduce_coop([&](so_5::coop_t& coop) {
             auto server1 = coop.make_agent<raft_server>("server1");
@@ -29,6 +29,9 @@ int main() {
             so_5::send<raft_server::SetCluster>(el.second, mboxes);
             so_5::send<raft_server::change_state>(el.second);
         }
+
+        //this_thread::sleep_for(chrono::milliseconds{2000});
+        //so_5::send<ClientRequest>(client_inbox, "hello world");
     });
     return 0;
 }

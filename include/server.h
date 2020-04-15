@@ -4,6 +4,11 @@
 #include <vector>
 #include <cmath>
 
+struct ClientRequest {
+    so_5::mbox_t inbox;
+    std::string cmd;
+};
+
 class raft_server final : public so_5::agent_t {
 public:
     struct change_state : public so_5::signal_t{};
@@ -16,6 +21,7 @@ public:
     };
 
     struct AppendEntry {
+        std::string leader_name;
         int term;
         int status{0};
     };
@@ -87,7 +93,8 @@ public:
             std::cout << "follower" << std::endl;
         })
         .event(&raft_server::heartbeat_handler)
-        .event(&raft_server::request_vote_handler);
+        .event(&raft_server::request_vote_handler)
+        .event(&raft_server::follower_client_request_handler);
 
 
         leader.on_enter([this] {
@@ -99,10 +106,10 @@ public:
             std::cout << m_name << ": leader" << std::endl;
             send_heartbeat();
         })
-        .event(&raft_server::heartbeat_handler);
+        .event(&raft_server::heartbeat_handler)
+        .event(&raft_server::leader_client_request_handler);
     }
 private:
-    
 
     state_t server_state{this},
     candidate{substate_of(server_state)},
@@ -114,6 +121,7 @@ private:
     int m_election_timeout;
     int m_vote_cnt{0};
     std::string m_name;
+    std::string m_curr_leader{};
     std::unordered_map<std::string, so_5::mbox_t> m_mboxes;
 
     void send_heartbeat() {
@@ -121,7 +129,7 @@ private:
             std::this_thread::sleep_for(std::chrono::milliseconds{50});
             for (auto el : m_mboxes) {
                 if (el.first != m_name)
-                    so_5::send<raft_server::AppendEntry>(el.second, m_term, 0);
+                    so_5::send<raft_server::AppendEntry>(m_name, el.second, m_term, 0);
             }
         }
     }
@@ -131,6 +139,7 @@ private:
             follower.activate();
             m_vote_cnt = 0;
             m_term = ae->term;
+            m_curr_leader = ae->leader_name;
             follower.time_limit(std::chrono::milliseconds{m_election_timeout}, candidate);
         }
     }
@@ -148,5 +157,13 @@ private:
             m_vote_cnt = 0;
             leader.activate();
         }
+    }
+
+    void leader_client_request_handler(mhood_t<ClientRequest> cr) {
+
+    }
+
+    void follower_client_request_handler(mhood_t<ClientRequest> cr) {
+        
     }
 };
