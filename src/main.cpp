@@ -11,7 +11,11 @@ int main() {
     so_5::launch([](so_5::environment_t& env) {
         so_5::mbox_t client_inbox;
 
+        auto client_disp = so_5::disp::thread_pool::make_dispatcher(env, 1);
+        auto server_disp = so_5::disp::thread_pool::make_dispatcher(env, 6);
+
         unordered_map<string, so_5::mbox_t> mboxes;
+
         env.introduce_coop([&](so_5::coop_t& coop) {
             auto server1 = coop.make_agent<raft_server>("server1");
             mboxes["server1"] = server1->so_direct_mbox();
@@ -27,15 +31,18 @@ int main() {
             client_inbox = coop.make_agent<Client>()->so_direct_mbox();
         });
 
+        so_5::send<SetCluster>(client_inbox, mboxes);
+        so_5::send<SetMBox>(client_inbox, client_inbox);
+
         for (auto el : mboxes) {
             so_5::send<SetCluster>(el.second, mboxes);
             so_5::send<raft_server::change_state>(el.second);
         }
 
-        so_5::send<SetCluster>(client_inbox, mboxes);
-
-        //this_thread::sleep_for(chrono::milliseconds{2000});
-        //so_5::send<ClientRequest>(client_inbox, "hello world");
+        
+        this_thread::sleep_for(chrono::milliseconds{2000});
+        so_5::send<ClientRequest>(mboxes["server2"], client_inbox, "hello world");
+        std::cout << "???" << std::endl;
     });
     return 0;
 }

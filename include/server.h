@@ -55,7 +55,7 @@ public:
         //**********************************************************************
         server_state.event([this](mhood_t<SetCluster> sc) {
             m_mboxes = sc->mboxes;
-        });
+        }).event(&raft_server::leader_client_request_handler);
 
 
         candidate.on_enter([this] {
@@ -107,15 +107,20 @@ public:
 
         leader.on_enter([this] {
             std::cout << "start of leader" << std::endl;
+            m_is_leader = true;
             m_vote_cnt = 0;
             so_5::send<raft_server::change_state>(*this);
         })
         .event([this](mhood_t<raft_server::change_state>) {
             std::cout << m_name << ": leader" << std::endl;
-            send_heartbeat();
+            m_heartbeat_thread = std::thread([this]{send_heartbeat();});
         })
         .event(&raft_server::heartbeat_handler)
-        .event(&raft_server::leader_client_request_handler);
+        .event(&raft_server::leader_client_request_handler)
+        .on_exit([this] {
+            m_is_leader = false;
+            m_heartbeat_thread.join();
+        });
     }
 private:
 
@@ -128,12 +133,14 @@ private:
     int m_heartbeat_freq;
     int m_election_timeout;
     int m_vote_cnt{0};
+    bool m_is_leader;
+    std::thread m_heartbeat_thread;
     std::string m_name;
     std::string m_curr_leader{};
     std::unordered_map<std::string, so_5::mbox_t> m_mboxes;
 
     void send_heartbeat() {
-        while (true) {
+        while (m_is_leader) {
             std::this_thread::sleep_for(std::chrono::milliseconds{50});
             for (auto el : m_mboxes) {
                 if (el.first != m_name)
@@ -168,10 +175,13 @@ private:
     }
 
     void leader_client_request_handler(mhood_t<ClientRequest> cr) {
-
+        std::cout << "youre right im the leader" << std::endl;
+        so_5::send<ServerResponse>(cr->inbox, 1, cr->cmd, m_name);
+        
     }
 
     void follower_client_request_handler(mhood_t<ClientRequest> cr) {
-
+        std::cout << "im not the leader" << std::endl;
+        so_5::send<ServerResponse>(cr->inbox, 0, "", m_curr_leader);
     }
 };
