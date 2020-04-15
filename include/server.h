@@ -1,3 +1,5 @@
+#pragma once
+
 #include <so_5/all.hpp>
 #include <random>
 #include <unordered_map>
@@ -8,6 +10,10 @@ struct ClientRequest {
     so_5::mbox_t inbox;
     std::string cmd;
 };
+
+struct ServerResponse {
+    std::string resp;
+}
 
 class raft_server final : public so_5::agent_t {
 public:
@@ -164,6 +170,6 @@ private:
     }
 
     void follower_client_request_handler(mhood_t<ClientRequest> cr) {
-        
+
     }
 };
