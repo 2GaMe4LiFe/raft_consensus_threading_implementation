@@ -55,7 +55,7 @@ public:
         //**********************************************************************
         server_state.event([this](mhood_t<SetCluster> sc) {
             m_mboxes = sc->mboxes;
-        }).event(&raft_server::leader_client_request_handler);
+        });
 
 
         candidate.on_enter([this] {
@@ -141,11 +141,11 @@ private:
 
     void send_heartbeat() {
         while (m_is_leader) {
-            std::this_thread::sleep_for(std::chrono::milliseconds{50});
             for (auto el : m_mboxes) {
                 if (el.first != m_name)
                     so_5::send<raft_server::AppendEntry>(el.second, m_name, m_term, 0);
             }
+            std::this_thread::sleep_for(std::chrono::milliseconds{50});
         }
     }
 
