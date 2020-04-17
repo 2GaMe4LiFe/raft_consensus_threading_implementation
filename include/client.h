@@ -36,13 +36,14 @@ public:
                 for (auto el : m_mboxes) {
                     if (cnt == idx) {
                         std::cout << "Client: selected " << el.first << std::endl;
-                        so_5::send<ClientRequest>(el.second, m_mbox, "hello server");
+                        m_cluster_leader = el.first;
+                        so_5::send<ClientRequest>(el.second, m_mbox, "hello " + m_cluster_leader);
                         break;
                     }
                     cnt++;
                 }
             } else if (m_cluster_leader != "" && m_mboxes.size() > 0) {
-                so_5::send<ClientRequest>(m_mboxes[m_cluster_leader], m_mbox, "hello server2");
+                so_5::send<ClientRequest>(m_mboxes[m_cluster_leader], m_mbox, "hello " + m_cluster_leader);
             }
         });
     }

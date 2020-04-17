@@ -60,34 +60,44 @@ public:
 
         candidate.on_enter([this] {
             m_vote_cnt = 0;
-            std::cout << "start of candidate" << std::endl;
-            so_5::send<raft_server::change_state>(*this);
-        })
-        .event([this](mhood_t<raft_server::change_state>) {
+            ++m_term;
+            m_is_candidate = true;
+            
             std::random_device dev;
             std::mt19937 rng(dev());
             std::uniform_int_distribution dist(150, 300);
             m_election_timeout = dist(rng);
+            
+            std::cout << "start of candidate" << std::endl;
+            m_request_vote_thread = std::thread([this]{send_request_vote();});
+            
+            so_5::send<raft_server::change_state>(*this);
+        })
+        .event([this](mhood_t<raft_server::change_state>) {
 
             std::cout << "candidate" << std::endl;
-            ++m_term;
 
             //**********************************************************************
             //transition to candidate state if the election timeout kicks in
             //**********************************************************************
-            candidate.time_limit(std::chrono::milliseconds{m_election_timeout},
+            /*candidate.time_limit(std::chrono::milliseconds{m_election_timeout},
               candidate);
-            
+            */
             //******************************************************************
             //sends RequestVote to every server in the cluster. Even itself.
             //the vote count gets incremented in the vote handler.
             //******************************************************************
-            for (auto el : m_mboxes) {
+            /*for (auto el : m_mboxes) {
                 so_5::send<raft_server::RequestVote>(el.second, m_name);
-            }
+            }*/
 
         })
-        .event(&raft_server::request_vote_handler);
+        .event(&raft_server::request_vote_handler)
+        .event(&raft_server::heartbeat_handler)
+        .on_exit([this] {
+            m_is_candidate = false;
+            m_request_vote_thread.join();
+        });
 
 
         follower.on_enter([this] {
@@ -133,11 +143,22 @@ private:
     int m_heartbeat_freq;
     int m_election_timeout;
     int m_vote_cnt{0};
-    bool m_is_leader;
+    bool m_is_leader{};
+    bool m_is_candidate{};
     std::thread m_heartbeat_thread;
+    std::thread m_request_vote_thread;
     std::string m_name;
     std::string m_curr_leader{};
     std::unordered_map<std::string, so_5::mbox_t> m_mboxes;
+
+    void send_request_vote() {
+        while (m_is_candidate) {
+            for (auto el : m_mboxes) {
+                so_5::send<raft_server::RequestVote>(el.second, m_name);
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds{m_election_timeout});
+        }
+    }
 
     void send_heartbeat() {
         while (m_is_leader) {
