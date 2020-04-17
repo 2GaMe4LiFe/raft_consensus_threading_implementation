@@ -1,1 +1,0 @@
-option('sobjectizer_include_dir', type : 'string', value : '/home/matthias/work/libraries/sobjectizer/cmake_build/target/include', description : 'the include dir of SObjectizer')
