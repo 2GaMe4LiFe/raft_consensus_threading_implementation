@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <vector>
 #include <cmath>
+#include <mutex>
 
 struct ClientRequest {
     so_5::mbox_t inbox;
@@ -45,9 +46,23 @@ public:
     };
 
     struct AppendEntry {
-        std::string leader_name;
+        
+        AppendEntry(int term_, bool success_) : term{term_},
+        success{success_} {};
+
+        AppendEntry(int term_, std::string leader_id_, int prev_log_index_,
+        int prev_log_term_, std::vector<std::string> entries_,
+        int leader_commit_) : term{term_}, leader_id{leader_id_},
+        prev_log_index{prev_log_index_}, prev_log_term{prev_log_term_},
+        entries{entries_}, leader_commit{leader_commit_} {}
+        
         int term;
-        int status{0};
+        std::string leader_id;
+        int prev_log_index;
+        int prev_log_term;
+        std::vector<std::string> entries;
+        int leader_commit;
+        bool success;
     };
 
     raft_server(context_t ctx, std::string name) 
@@ -131,11 +146,12 @@ public:
             m_is_leader = true;
             m_vote_cnt = 0;
             so_5::send<raft_server::change_state>(*this);
+
+            m_heartbeat_thread = std::thread([this]{send_heartbeat();});
+            m_heartbeat_thread.detach();
         })
         .event([this](mhood_t<raft_server::change_state>) {
             std::cout << m_name << ": leader" << std::endl;
-            m_heartbeat_thread = std::thread([this]{send_heartbeat();});
-            m_heartbeat_thread.detach();
         })
         .event(&raft_server::heartbeat_handler)
         .event(&raft_server::leader_client_request_handler)
@@ -168,6 +184,8 @@ private:
     int m_next_index{m_commit_index +1};
     int m_match_index{0};
 
+    std::mutex ae_mutex;
+
     void send_request_vote() {
         while (m_is_candidate) {
             std::cout << "thread is running..." << std::endl;
@@ -179,28 +197,28 @@ private:
     }
 
     void send_heartbeat() {
-        std::cout << "running..." << std::endl;
+        std::vector<std::string> empty_v;
         while (m_is_leader) {
             for (auto el : m_mboxes) {
-                if (el.first != m_name)
-                    so_5::send<raft_server::AppendEntry>(el.second, m_name, m_term, 0);
+                if (el.first != m_name) {
+                    so_5::send<raft_server::AppendEntry>(el.second, m_term, m_name, m_last_applied, m_term, empty_v, m_commit_index);
+                }
             }
             std::this_thread::sleep_for(std::chrono::milliseconds{50});
         }
     }
 
     void heartbeat_handler(mhood_t<raft_server::AppendEntry> ae) {
-        if (ae->status == 0 && ae->term >= m_term) {
+        if ((ae->entries).size() == 0 && ae->term >= m_term) {
             follower.activate();
             m_vote_cnt = 0;
             m_term = ae->term;
-            m_curr_leader = ae->leader_name;
+            m_curr_leader = ae->leader_id;
             follower.time_limit(std::chrono::milliseconds{m_election_timeout}, candidate);
         }
     }
 
     void request_vote_handler(mhood_t<raft_server::RequestVote> rv) {
-
         if (rv->vote_granted) {
             ++m_vote_cnt;
         } else {
