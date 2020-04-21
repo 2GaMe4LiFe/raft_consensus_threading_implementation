@@ -1,0 +1,54 @@
+\documentclass[11pt,a4paper,openany]{book}
+
+%\usepackage[german]{babel}	%in case you want to write a german thesis
+
+%settings for generation of titlepage, index and table of content
+\include{sections/Settings}
+
+%definitions for easier costumization
+\def \subtitle {Simple Raft-Simulator}
+\def \year {2019/20}
+\def \authors { \parseauthor{Recherche, Programmierung, Testing}{Matthias Guzmits}{5AHIF}}
+\def \supervisor {none}
+\def \declauthors{ Matthias Guzmits &}	% for two authors
+% \def \declauthors{ Vor- und NACHNAME & Vor- und NACHNAME \\ Vor- und NACHNAME}	% for three authors
+
+\addbibresource{main.bib}
+
+\begin{document}
+	%include titlepage
+	\input{sections/titlepage}
+	
+	%include acknowledgements, abstract and documentation
+	
+	\pagestyle{plain}
+	
+	\frontmatter
+	
+	\pagenumbering{roman}
+	\input{sections/declarationof}
+	
+	\tableofcontents
+	
+	\input{sections/acknowledgement}
+	\input{sections/abstract}
+	
+	%include thesis
+	
+	\mainmatter
+	\pagenumbering{arabic}
+	
+	\input{sections/introduction}
+	
+	
+	% Index
+	\newpage
+	\chapter*{Index}
+	\printindex[name]
+	\printindex[title]
+	
+	\printbibliography
+	
+	\input{sections/messbox}
+
+\end{document}
