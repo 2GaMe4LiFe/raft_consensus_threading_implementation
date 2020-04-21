@@ -28,8 +28,20 @@ public:
     struct heartbeat : public so_5::signal_t{};
 
     struct RequestVote {
-        std::string name;
+
+        RequestVote(int term_, bool vote_granted_) : term{term_},
+        vote_granted{vote_granted_} {}
+
+        RequestVote(int term_, std::string candidate_id_, int lli_, int llt_)
+        : term{term_}, candidate_id{candidate_id_}, last_log_index{lli_},
+        last_log_term{llt_}, vote_granted{false} {}
+
         int term;
+        std::string candidate_id;
+        int last_log_index;
+        int last_log_term;
+
+        bool vote_granted;
     };
 
     struct AppendEntry {
@@ -69,9 +81,9 @@ public:
             m_election_timeout = dist(rng);
             
             std::cout << "start of candidate" << std::endl;
-            m_request_vote_thread = std::thread([this]{send_request_vote();});
-            
             so_5::send<raft_server::change_state>(*this);
+            m_request_vote_thread = std::thread([this]{send_request_vote();});
+            m_request_vote_thread.detach();
         })
         .event([this](mhood_t<raft_server::change_state>) {
 
@@ -92,11 +104,10 @@ public:
             }*/
 
         })
-        .event(&raft_server::request_vote_handler)
         .event(&raft_server::heartbeat_handler)
+        .event(&raft_server::request_vote_handler)
         .on_exit([this] {
             m_is_candidate = false;
-            m_request_vote_thread.join();
         });
 
 
@@ -124,12 +135,12 @@ public:
         .event([this](mhood_t<raft_server::change_state>) {
             std::cout << m_name << ": leader" << std::endl;
             m_heartbeat_thread = std::thread([this]{send_heartbeat();});
+            m_heartbeat_thread.detach();
         })
         .event(&raft_server::heartbeat_handler)
         .event(&raft_server::leader_client_request_handler)
         .on_exit([this] {
             m_is_leader = false;
-            m_heartbeat_thread.join();
         });
     }
 private:
@@ -139,7 +150,6 @@ private:
     follower{initial_substate_of(server_state)},
     leader{substate_of(server_state)};
 
-    int m_term{0};
     int m_heartbeat_freq;
     int m_election_timeout;
     int m_vote_cnt{0};
@@ -151,16 +161,25 @@ private:
     std::string m_curr_leader{};
     std::unordered_map<std::string, so_5::mbox_t> m_mboxes;
 
+    int m_term{0};
+    std::vector<std::string> m_log{};
+    int m_commit_index{0};
+    int m_last_applied{0};
+    int m_next_index{m_commit_index +1};
+    int m_match_index{0};
+
     void send_request_vote() {
         while (m_is_candidate) {
+            std::cout << "thread is running..." << std::endl;
             for (auto el : m_mboxes) {
-                so_5::send<raft_server::RequestVote>(el.second, m_name);
+                so_5::send<raft_server::RequestVote>(el.second, m_term, m_name, m_last_applied, m_term/*last term in log*/);
             }
             std::this_thread::sleep_for(std::chrono::milliseconds{m_election_timeout});
         }
     }
 
     void send_heartbeat() {
+        std::cout << "running..." << std::endl;
         while (m_is_leader) {
             for (auto el : m_mboxes) {
                 if (el.first != m_name)
@@ -182,11 +201,15 @@ private:
 
     void request_vote_handler(mhood_t<raft_server::RequestVote> rv) {
 
-        if (rv->name == m_name) {
+        if (rv->vote_granted) {
             ++m_vote_cnt;
         } else {
+            std::cout << "Voted for " << rv->candidate_id << std::endl;
             if (rv->term >= m_term)
-                so_5::send<raft_server::RequestVote>(m_mboxes[rv->name], rv->name, rv->term);
+                so_5::send<raft_server::RequestVote>(m_mboxes[rv->candidate_id], m_term, true);
+            else
+                so_5::send<raft_server::RequestVote>(m_mboxes[rv->candidate_id], m_term, false);
+
         }
 
         if (m_vote_cnt > ceil(m_mboxes.size() / 2.0)) {
