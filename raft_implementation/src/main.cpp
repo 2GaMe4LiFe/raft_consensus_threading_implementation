@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include "server.h"
 #include "client.h"
+#include "functionality.h"
 
 using namespace std;
 
