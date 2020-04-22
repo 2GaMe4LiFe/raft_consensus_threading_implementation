@@ -43,7 +43,7 @@ public:
                     cnt++;
                 }
             } else if (m_cluster_leader != "" && m_mboxes.size() > 0) {
-                so_5::send<ClientRequest>(m_mboxes[m_cluster_leader], m_mbox, "hello " + m_cluster_leader);
+                so_5::send<ClientRequest>(m_mboxes[m_cluster_leader], m_mbox, "ADD;5");
             }
         });
     }

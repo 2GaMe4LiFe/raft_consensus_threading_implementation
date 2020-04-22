@@ -41,8 +41,8 @@ public:
         }
     }
 
-    long long get_result() {
-        return m_result;
+    std::string get_result() {
+        return std::to_string(m_result);
     }
 
 private:

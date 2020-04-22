@@ -7,6 +7,8 @@
 #include <cmath>
 #include <tuple>
 
+#include "functionality.h"
+
 struct ClientRequest {
     so_5::mbox_t inbox;
     std::string cmd;
@@ -177,6 +179,8 @@ private:
     std::string m_curr_leader{};
     std::unordered_map<std::string, so_5::mbox_t> m_mboxes;
 
+    Calc m_register;
+
     int m_term{0};
     std::vector<std::tuple<int, int, std::string>> m_log{};
     int m_commit_index{0};
@@ -236,7 +240,10 @@ private:
 
     void leader_client_request_handler(mhood_t<ClientRequest> cr) {
         std::cout << "youre right im the leader" << std::endl;
-        so_5::send<ServerResponse>(cr->inbox, 1, cr->cmd, m_name);
+
+        m_register.parse(cr->cmd);
+
+        so_5::send<ServerResponse>(cr->inbox, 1, m_register.get_result(), m_name);
         
     }
 
