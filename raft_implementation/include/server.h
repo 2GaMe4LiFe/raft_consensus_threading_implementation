@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include <vector>
 #include <cmath>
-#include <mutex>
+#include <tuple>
 
 struct ClientRequest {
     so_5::mbox_t inbox;
@@ -51,7 +51,7 @@ public:
         success{success_} {};
 
         AppendEntry(int term_, std::string leader_id_, int prev_log_index_,
-        int prev_log_term_, std::vector<std::string> entries_,
+        int prev_log_term_, std::vector<std::tuple<int,int,std::string>> entries_,
         int leader_commit_) : term{term_}, leader_id{leader_id_},
         prev_log_index{prev_log_index_}, prev_log_term{prev_log_term_},
         entries{entries_}, leader_commit{leader_commit_} {}
@@ -60,7 +60,7 @@ public:
         std::string leader_id;
         int prev_log_index;
         int prev_log_term;
-        std::vector<std::string> entries;
+        std::vector<std::tuple<int,int,std::string>> entries;
         int leader_commit;
         bool success;
     };
@@ -178,13 +178,11 @@ private:
     std::unordered_map<std::string, so_5::mbox_t> m_mboxes;
 
     int m_term{0};
-    std::vector<std::string> m_log{};
+    std::vector<std::tuple<int, int, std::string>> m_log{};
     int m_commit_index{0};
     int m_last_applied{0};
     int m_next_index{m_commit_index +1};
     int m_match_index{0};
-
-    std::mutex ae_mutex;
 
     void send_request_vote() {
         while (m_is_candidate) {
@@ -197,7 +195,7 @@ private:
     }
 
     void send_heartbeat() {
-        std::vector<std::string> empty_v;
+        std::vector<std::tuple<int,int,std::string>> empty_v;
         while (m_is_leader) {
             for (auto el : m_mboxes) {
                 if (el.first != m_name) {
