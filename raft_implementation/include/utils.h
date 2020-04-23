@@ -49,7 +49,7 @@ namespace utils {
         if (os.good()) {
             for (auto el : log) {
                 os << std::to_string(std::get<0>(el)) << ";"
-                    << std::get<1>(el);
+                    << std::get<1>(el) << "\n";
             }
         }
         os.close();
