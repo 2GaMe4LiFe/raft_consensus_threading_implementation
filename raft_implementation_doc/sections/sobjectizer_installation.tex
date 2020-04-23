@@ -1,0 +1,26 @@
+\chapter{Installation von Sobjectizer}
+
+\vspace{10mm}
+
+Sobjectizer ist ein Framework für C++ welches das Verwenden des Actor-Models vereinfachen soll.
+Das einbinden von diesem Framework in mein Projekt geschieht über eine Shared-Library.
+Um Sobjectizer jedoch verwenden zu können ist es erst einmmal notwendig die Libraries zu kompilieren.
+
+\section{Kompilieren von Sobjectizer}
+Für das kompilieren von Sobjectizer wird von den Herstellern Stiffstream CMake vorausgesetzt.
+Das builden sieht unter Linux folgendermaßen aus:
+
+\begin{minted}{bash}
+git clone https://github.com/stiffstream/sobjectizer
+cd sobjectizer
+mkdir cmake_build
+cmake -DCMAKE_INSTALL_PREFIX=target -DCMAKE_BUILD_TYPE=Release ../dev
+cmake --build . --config Release
+cmake --build . --config Release --target install
+\end{minted}
+
+Nun sollten sich in einem neu erstellten target-Folder zwei Ordner befinden. Einmal include und einmal
+lib. In dem lib-Folder befinden sich die kompilierte Static- und Dynamic-Library. Im include-Folder können
+alle notwendigen header-Files gefunden werden.
+
+\section{Setup zum Verwenden des Projekts}

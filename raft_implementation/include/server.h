@@ -98,28 +98,8 @@ public:
             m_election_timeout = dist(rng);
             
             std::cout << "start of candidate" << std::endl;
-            so_5::send<raft_server::change_state>(*this);
             m_request_vote_thread = std::thread([this]{send_request_vote();});
             m_request_vote_thread.detach();
-        })
-        .event([this](mhood_t<raft_server::change_state>) {
-
-            std::cout << "candidate" << std::endl;
-
-            //**********************************************************************
-            //transition to candidate state if the election timeout kicks in
-            //**********************************************************************
-            /*candidate.time_limit(std::chrono::milliseconds{m_election_timeout},
-              candidate);
-            */
-            //******************************************************************
-            //sends RequestVote to every server in the cluster. Even itself.
-            //the vote count gets incremented in the vote handler.
-            //******************************************************************
-            /*for (auto el : m_mboxes) {
-                so_5::send<raft_server::RequestVote>(el.second, m_name);
-            }*/
-
         })
         .event(&raft_server::heartbeat_handler)
         .event(&raft_server::request_vote_handler)
@@ -192,7 +172,8 @@ private:
         while (m_is_candidate) {
             std::cout << "thread is running..." << std::endl;
             for (auto el : m_mboxes) {
-                so_5::send<raft_server::RequestVote>(el.second, m_term, m_name, m_last_applied, m_term/*last term in log*/);
+                so_5::send<raft_server::RequestVote>(el.second, m_term, m_name,
+                    m_last_applied, m_term/*last term in log*/);
             }
             std::this_thread::sleep_for(std::chrono::milliseconds{m_election_timeout});
         }
@@ -203,7 +184,8 @@ private:
         while (m_is_leader) {
             for (auto el : m_mboxes) {
                 if (el.first != m_name) {
-                    so_5::send<raft_server::AppendEntry>(el.second, m_term, m_name, m_last_applied, m_term, empty_v, m_commit_index);
+                    so_5::send<raft_server::AppendEntry>(el.second, m_term, m_name,
+                        m_last_applied, m_term, empty_v, m_commit_index);
                 }
             }
             std::this_thread::sleep_for(std::chrono::milliseconds{50});
