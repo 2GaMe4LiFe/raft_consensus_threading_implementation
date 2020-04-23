@@ -53,7 +53,7 @@ public:
         success{success_} {};
 
         AppendEntry(int term_, std::string leader_id_, int prev_log_index_,
-        int prev_log_term_, std::vector<std::tuple<int,int,std::string>> entries_,
+        int prev_log_term_, std::vector<std::tuple<int,std::string>> entries_,
         int leader_commit_) : term{term_}, leader_id{leader_id_},
         prev_log_index{prev_log_index_}, prev_log_term{prev_log_term_},
         entries{entries_}, leader_commit{leader_commit_} {}
@@ -62,8 +62,13 @@ public:
         std::string leader_id;
         int prev_log_index;
         int prev_log_term;
-        std::vector<std::tuple<int,int,std::string>> entries;
+        std::vector<std::tuple<int,std::string>> entries;
         int leader_commit;
+        bool success;
+    };
+
+    struct AppendEntryResult {
+        int term;
         bool success;
     };
 
@@ -109,7 +114,7 @@ public:
 
 
         follower.on_enter([this] {
-            std::cout << "start of follower" << std::endl;
+            std::cout << m_name << " start of follower" << std::endl;
             m_vote_cnt = 0;
             so_5::send<raft_server::change_state>(*this);
         })
@@ -153,8 +158,10 @@ private:
     int m_vote_cnt{0};
     bool m_is_leader{};
     bool m_is_candidate{};
+    
     std::thread m_heartbeat_thread;
     std::thread m_request_vote_thread;
+
     std::string m_name;
     std::string m_curr_leader{};
     std::unordered_map<std::string, so_5::mbox_t> m_mboxes;
@@ -162,7 +169,7 @@ private:
     Calc m_register;
 
     int m_term{0};
-    std::vector<std::tuple<int, int, std::string>> m_log{};
+    std::vector<std::tuple<int, std::string>> m_log{};
     int m_commit_index{0};
     int m_last_applied{0};
     int m_next_index{m_commit_index +1};
@@ -172,20 +179,28 @@ private:
         while (m_is_candidate) {
             std::cout << "thread is running..." << std::endl;
             for (auto el : m_mboxes) {
-                so_5::send<raft_server::RequestVote>(el.second, m_term, m_name,
-                    m_last_applied, m_term/*last term in log*/);
+                if (m_log.size() != 0)
+                    so_5::send<raft_server::RequestVote>(el.second, m_term, m_name,
+                        m_log.size(), std::get<0>(m_log[m_log.size()-1]));
+                else
+                    so_5::send<raft_server::RequestVote>(el.second, m_term, m_name,
+                        m_log.size(), 0);
             }
             std::this_thread::sleep_for(std::chrono::milliseconds{m_election_timeout});
         }
     }
 
     void send_heartbeat() {
-        std::vector<std::tuple<int,int,std::string>> empty_v;
+        std::vector<std::tuple<int,std::string>> empty_v;
         while (m_is_leader) {
             for (auto el : m_mboxes) {
                 if (el.first != m_name) {
-                    so_5::send<raft_server::AppendEntry>(el.second, m_term, m_name,
-                        m_last_applied, m_term, empty_v, m_commit_index);
+                    if (m_log.size() != 0)
+                        so_5::send<raft_server::AppendEntry>(el.second, m_term, m_name,
+                            m_log.size()-1, std::get<0>(m_log[m_log.size()-1]), empty_v, m_commit_index);
+                    else
+                        so_5::send<raft_server::AppendEntry>(el.second, m_term, m_name,
+                            m_log.size()-1, 0, empty_v, m_commit_index);
                 }
             }
             std::this_thread::sleep_for(std::chrono::milliseconds{50});
@@ -198,7 +213,18 @@ private:
             m_vote_cnt = 0;
             m_term = ae->term;
             m_curr_leader = ae->leader_id;
+            
+            if (ae->prev_log_index >= m_log.size())
+                so_5::send<raft_server::AppendEntryResult>(m_mboxes[m_curr_leader], m_term, false);
+            else if (std::get<0>(m_log[ae->prev_log_index]) == ae->prev_log_term)
+                so_5::send<raft_server::AppendEntryResult>(m_mboxes[m_curr_leader], m_term, true);
+            else
+                so_5::send<raft_server::AppendEntryResult>(m_mboxes[m_curr_leader], m_term, false);
+
+
             follower.time_limit(std::chrono::milliseconds{m_election_timeout}, candidate);
+        } else if (ae->term < m_term) {
+            so_5::send<raft_server::AppendEntryResult>(m_mboxes[m_curr_leader], m_term, false);
         }
     }
 
@@ -222,6 +248,8 @@ private:
 
     void leader_client_request_handler(mhood_t<ClientRequest> cr) {
         std::cout << "youre right im the leader" << std::endl;
+
+        m_log.push_back(std::tuple<int,std::string>(m_term, cr->cmd));
 
         m_register.parse(cr->cmd);
 

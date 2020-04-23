@@ -15,8 +15,8 @@ namespace utils {
         return (*m) ? mix(*m,hash(m+1)) : 0;
     }
 
-    std::vector<std::tuple<int,int,std::string>> read_log_from(std::string filename) {
-        std::vector<std::tuple<int,int, std::string>> cont;
+    std::vector<std::tuple<int,std::string>> read_log_from(std::string filename) {
+        std::vector<std::tuple<int, std::string>> cont;
         
         std::ifstream is{filename};
         std::string line;
@@ -30,28 +30,28 @@ namespace utils {
 
                 std::getline(ss, tmp, ';');
                 var1 = tmp;
-                std::getline(ss, tmp, ';');
-                var2 = tmp;
                 std::getline(ss, tmp);
-                var3 = tmp;
+                var2 = tmp;
 
-                cont.push_back(std::tuple<int,int,std::string>(
-                    std::stoi(var1), std::stoi(var2), var3));
+                cont.push_back(std::tuple<int,std::string>(
+                    std::stoi(var1), var2));
             }
-        }        
+        }
+
+        is.close();    
 
         return cont;
     }
 
     void write_log_to(std::string filename,
-        std::vector<std::tuple<int,int,std::string>> log) {
+        std::vector<std::tuple<int,std::string>> log) {
         std::ofstream os{filename};
         if (os.good()) {
             for (auto el : log) {
                 os << std::to_string(std::get<0>(el)) << ";"
-                    << std::to_string(std::get<1>(el))
-                    << ";" << std::get<2>(el);
+                    << std::get<1>(el);
             }
         }
+        os.close();
     }
 }
