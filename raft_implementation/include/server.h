@@ -31,6 +31,8 @@ public:
 
     struct heartbeat : public so_5::signal_t{};
 
+    struct deactivate : public so_5::signal_t{};
+
     struct RequestVote {
 
         RequestVote(int term_, bool vote_granted_) : term{term_},
@@ -93,6 +95,12 @@ public:
             for (auto el : sc->mboxes) {
                 m_mboxes[el.first] = std::tuple<so_5::mbox_t,int>(el.second,m_log.size());
             }
+        })
+        .event([this](mhood_t<raft_server::deactivate>) {
+            if (inactive.is_active())
+                follower.activate();
+            else
+                inactive.activate();
         });
 
 
@@ -122,6 +130,7 @@ public:
             m_heartbeat_mtx.unlock();
             std::cout << m_name << " start of follower" << std::endl;
             m_vote_cnt = 0;
+                
             so_5::send<raft_server::change_state>(*this);
         })
         .event([this](mhood_t<raft_server::change_state>) {
@@ -171,7 +180,8 @@ private:
     state_t server_state{this},
     candidate{substate_of(server_state)},
     follower{initial_substate_of(server_state)},
-    leader{substate_of(server_state)};
+    leader{substate_of(server_state)},
+    inactive{substate_of(server_state)};
 
     int m_heartbeat_freq;
     int m_election_timeout;
@@ -219,7 +229,6 @@ private:
         m_heartbeat_mtx.lock();
         while (m_is_leader) {
             for (auto el : m_mboxes) {
-                std::cout << el.first << std::endl;
                 if (el.first != m_name) {
                     if (m_log.size() != 0) {
                         std::vector<std::tuple<int,std::string>> payload;
@@ -227,12 +236,12 @@ private:
                             payload.push_back(m_log[i]);
                         }
                         
-                        std::cout << "HEARTBEAT: "
+                        /*std::cout << "HEARTBEAT: "
                             << el.first << " "
                             << m_log.size() << " "
                             << std::get<1>(el.second) << " "
                             << std::get<0>(m_log[std::get<1>(el.second)-1])
-                            << std::endl;
+                            << std::endl;*/
 
                         so_5::send<raft_server::AppendEntry>(std::get<0>(el.second), m_term, m_name,
                             std::get<1>(el.second), std::get<0>(m_log[std::get<1>(el.second)-1]), payload, m_commit_index);
@@ -249,7 +258,7 @@ private:
 
     void consistency_check(mhood_t<raft_server::AppendEntryResult> aer) {
         if (!aer->success) {
-            std::cout << "DEBUG--: " << std::get<1>(m_mboxes[aer->follower_name]) << " " << m_log.size() << std::endl;
+            //std::cout << "DEBUG--: " << std::get<1>(m_mboxes[aer->follower_name]) << " " << m_log.size() << std::endl;
             if (std::get<1>(m_mboxes[aer->follower_name])-1 >= 0) {//nextIndex
                 std::vector<std::tuple<int,std::string>> empty_v;
                 std::get<1>(m_mboxes[aer->follower_name])--;
@@ -258,7 +267,7 @@ private:
                             std::get<0>(m_log[std::get<1>(m_mboxes[aer->follower_name])]), empty_v, m_commit_index);*/
             }
         } else {
-            std::cout << "DEBUG++: " << std::get<1>(m_mboxes[aer->follower_name]) << " " << m_log.size() << std::endl;
+            //std::cout << "DEBUG++: " << std::get<1>(m_mboxes[aer->follower_name]) << " " << m_log.size() << std::endl;
             std::vector<std::tuple<int,std::string>> payload;
 
             for (int i{std::get<1>(m_mboxes[aer->follower_name])}; i < m_log.size(); i++) {
@@ -285,7 +294,7 @@ private:
             if (ae->prev_log_term == 0) {
                 so_5::send<raft_server::AppendEntryResult>(std::get<0>(m_mboxes[m_curr_leader]), m_name, m_term, true);
             } else if (ae->prev_log_index < m_log.size()) {
-                std::cout << "SONDER: " << ae->prev_log_index << " " << std::get<0>(m_log[ae->prev_log_index]) << " " << ae->prev_log_term << std::endl;
+                //std::cout << "SONDER: " << ae->prev_log_index << " " << std::get<0>(m_log[ae->prev_log_index]) << " " << ae->prev_log_term << std::endl;
                 if (std::get<0>(m_log[ae->prev_log_index]) == ae->prev_log_term) {
                     so_5::send<raft_server::AppendEntryResult>(std::get<0>(m_mboxes[m_curr_leader]), m_name, m_term, true);
                 } else {

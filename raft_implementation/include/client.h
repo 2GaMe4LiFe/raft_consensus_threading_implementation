@@ -21,8 +21,8 @@ public:
 
         off.activate();
 
-        off.time_limit(std::chrono::milliseconds{1000}, on);
-        on.time_limit(std::chrono::milliseconds{1000}, off);
+        off.time_limit(std::chrono::milliseconds{500}, on);
+        on.time_limit(std::chrono::milliseconds{250}, off);
 
         on.on_enter([this] {
             if (m_cluster_leader == "" && m_mboxes.size() > 0) {
@@ -43,7 +43,7 @@ public:
                     cnt++;
                 }
             } else if (m_cluster_leader != "" && m_mboxes.size() > 0) {
-                so_5::send<ClientRequest>(m_mboxes[m_cluster_leader], m_mbox, "ADD;5");
+                so_5::send<ClientRequest>(m_mboxes[m_cluster_leader], m_mbox, "ADD;1");
             }
         });
     }

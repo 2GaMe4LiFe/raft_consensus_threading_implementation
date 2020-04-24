@@ -36,6 +36,20 @@ int main() {
             so_5::send<SetCluster>(el.second, mboxes);
             so_5::send<raft_server::change_state>(el.second);
         }
+
+        so_5::send<raft_server::deactivate>(mboxes["server2"]);
+
+        this_thread::sleep_for(chrono::milliseconds{5000});
+
+        so_5::send<raft_server::deactivate>(mboxes["server2"]);
+
+        this_thread::sleep_for(chrono::milliseconds{7000});
+
+        so_5::send<raft_server::deactivate>(mboxes["server2"]);
+
+        this_thread::sleep_for(chrono::milliseconds{3000});
+
+        so_5::send<raft_server::deactivate>(mboxes["server2"]);
     });
     return 0;
 }
