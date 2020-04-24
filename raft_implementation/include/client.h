@@ -37,7 +37,7 @@ public:
                     if (cnt == idx) {
                         std::cout << "Client: selected " << el.first << std::endl;
                         m_cluster_leader = el.first;
-                        so_5::send<ClientRequest>(el.second, m_mbox, "hello " + m_cluster_leader);
+                        so_5::send<ClientRequest>(el.second, m_mbox, "");
                         break;
                     }
                     cnt++;

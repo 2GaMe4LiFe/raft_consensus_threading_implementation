@@ -6,6 +6,7 @@
 #include <vector>
 #include <cmath>
 #include <tuple>
+#include <mutex>
 
 #include "functionality.h"
 
@@ -117,6 +118,8 @@ public:
 
 
         follower.on_enter([this] {
+            m_heartbeat_mtx.lock();
+            m_heartbeat_mtx.unlock();
             std::cout << m_name << " start of follower" << std::endl;
             m_vote_cnt = 0;
             so_5::send<raft_server::change_state>(*this);
@@ -135,12 +138,20 @@ public:
             std::cout << "start of leader" << std::endl;
             m_is_leader = true;
             m_vote_cnt = 0;
-            so_5::send<raft_server::change_state>(*this);
-
+            m_heartbeat_mtx.lock();
+            std::cout << m_name << ": "<< m_log.size() << std::endl;
             for (auto el : m_mboxes) {
-                std::get<1>(el.second) = m_log.size();
+                m_mboxes[el.first] = std::tuple<so_5::mbox_t,int>(std::get<0>(el.second), m_log.size());
+                std::cout << "set " << el.first << " to " << m_log.size() << std::endl;
+                std::cout << std::get<1>(el.second) << std::endl;
             }
 
+            for (auto el : m_mboxes) {
+                std::cout << std::get<1>(el.second) << std::endl;
+            }
+
+            so_5::send<raft_server::change_state>(*this);
+            m_heartbeat_mtx.unlock();
             m_heartbeat_thread = std::thread([this]{send_heartbeat();});
             m_heartbeat_thread.detach();
             leader.time_limit(std::chrono::milliseconds{10000}, follower);
@@ -184,6 +195,8 @@ private:
     int m_next_index{m_commit_index +1};
     int m_match_index{0};
 
+    std::mutex m_heartbeat_mtx;
+
     void send_request_vote() {
         while (m_is_candidate) {
             std::cout << "thread is running..." << std::endl;
@@ -191,9 +204,11 @@ private:
                 if (m_log.size() != 0)
                     so_5::send<raft_server::RequestVote>(std::get<0>(el.second), m_term, m_name,
                         m_log.size(), std::get<0>(m_log[m_log.size()-1]));
-                else
+                else {
+                    std::cout << "#fail" << std::endl;
                     so_5::send<raft_server::RequestVote>(std::get<0>(el.second), m_term, m_name,
                         m_log.size(), 0);
+                }
             }
             std::this_thread::sleep_for(std::chrono::milliseconds{m_election_timeout});
         }
@@ -201,32 +216,49 @@ private:
 
     void send_heartbeat() {
         std::vector<std::tuple<int,std::string>> empty_v;
+        m_heartbeat_mtx.lock();
         while (m_is_leader) {
             for (auto el : m_mboxes) {
+                std::cout << el.first << std::endl;
                 if (el.first != m_name) {
-                    if (m_log.size() != 0)
+                    if (m_log.size() != 0) {
+                        std::vector<std::tuple<int,std::string>> payload;
+                        for (int i{std::get<1>(el.second)}; i < m_log.size(); i++) {
+                            payload.push_back(m_log[i]);
+                        }
+                        
+                        std::cout << "HEARTBEAT: "
+                            << el.first << " "
+                            << m_log.size() << " "
+                            << std::get<1>(el.second) << " "
+                            << std::get<0>(m_log[std::get<1>(el.second)-1])
+                            << std::endl;
+
                         so_5::send<raft_server::AppendEntry>(std::get<0>(el.second), m_term, m_name,
-                            ((int)m_log.size())-1, std::get<0>(m_log[m_log.size()-1]), empty_v, m_commit_index);
-                    else
+                            std::get<1>(el.second), std::get<0>(m_log[std::get<1>(el.second)-1]), payload, m_commit_index);
+                    } else
                         so_5::send<raft_server::AppendEntry>(std::get<0>(el.second), m_term, m_name,
-                            ((int)m_log.size())-1, 0, empty_v, m_commit_index);
+                            m_log.size(), 0, empty_v, m_commit_index);
                 }
             }
             std::this_thread::sleep_for(std::chrono::milliseconds{50});
         }
+        m_heartbeat_mtx.unlock();
+        std::cout << "ended heartbeat" << std::endl;
     }
 
     void consistency_check(mhood_t<raft_server::AppendEntryResult> aer) {
         if (!aer->success) {
+            std::cout << "DEBUG--: " << std::get<1>(m_mboxes[aer->follower_name]) << " " << m_log.size() << std::endl;
             if (std::get<1>(m_mboxes[aer->follower_name])-1 >= 0) {//nextIndex
                 std::vector<std::tuple<int,std::string>> empty_v;
                 std::get<1>(m_mboxes[aer->follower_name])--;
-                so_5::send<raft_server::AppendEntry>(std::get<0>(m_mboxes[aer->follower_name]), m_term, m_name,
+                /*so_5::send<raft_server::AppendEntry>(std::get<0>(m_mboxes[aer->follower_name]), m_term, m_name,
                             std::get<1>(m_mboxes[aer->follower_name]),
-                            std::get<0>(m_log[std::get<1>(m_mboxes[aer->follower_name])]), empty_v, m_commit_index);
+                            std::get<0>(m_log[std::get<1>(m_mboxes[aer->follower_name])]), empty_v, m_commit_index);*/
             }
         } else {
-
+            std::cout << "DEBUG++: " << std::get<1>(m_mboxes[aer->follower_name]) << " " << m_log.size() << std::endl;
             std::vector<std::tuple<int,std::string>> payload;
 
             for (int i{std::get<1>(m_mboxes[aer->follower_name])}; i < m_log.size(); i++) {
@@ -234,9 +266,9 @@ private:
             }
 
             if (std::get<1>(m_mboxes[aer->follower_name]) < m_log.size()) {
-                so_5::send<raft_server::AppendEntry>(std::get<0>(m_mboxes[aer->follower_name]), m_term, m_name,
-                                std::get<1>(m_mboxes[aer->follower_name]),
-                                std::get<0>(m_log[std::get<1>(m_mboxes[aer->follower_name])]), payload, m_commit_index);
+                /*so_5::send<raft_server::AppendEntry>(std::get<0>(m_mboxes[aer->follower_name]), m_term, m_name,
+                                m_log.size(),
+                                std::get<0>(m_log[std::get<1>(m_mboxes[aer->follower_name])]), payload, m_commit_index);*/
 
                 std::get<1>(m_mboxes[aer->follower_name]) = m_log.size();
             }
@@ -244,12 +276,36 @@ private:
     }
 
     void heartbeat_handler(mhood_t<raft_server::AppendEntry> ae) {
-        if ((ae->entries).size() == 0 && ae->term >= m_term) {
+        if (ae->term >= m_term) {
             follower.activate();
             m_vote_cnt = 0;
             m_term = ae->term;
             m_curr_leader = ae->leader_id;
             
+            if (ae->prev_log_term == 0) {
+                so_5::send<raft_server::AppendEntryResult>(std::get<0>(m_mboxes[m_curr_leader]), m_name, m_term, true);
+            } else if (ae->prev_log_index < m_log.size()) {
+                std::cout << "SONDER: " << ae->prev_log_index << " " << std::get<0>(m_log[ae->prev_log_index]) << " " << ae->prev_log_term << std::endl;
+                if (std::get<0>(m_log[ae->prev_log_index]) == ae->prev_log_term) {
+                    so_5::send<raft_server::AppendEntryResult>(std::get<0>(m_mboxes[m_curr_leader]), m_name, m_term, true);
+                } else {
+                    so_5::send<raft_server::AppendEntryResult>(std::get<0>(m_mboxes[m_curr_leader]), m_name, m_term, false);
+                }
+            } else {
+                so_5::send<raft_server::AppendEntryResult>(std::get<0>(m_mboxes[m_curr_leader]), m_name, m_term, true);
+            }
+
+            for (auto el : ae->entries) {
+                m_log.push_back(el);
+                m_register.parse(std::get<1>(el));
+            }
+
+            m_last_applied = m_log.size();
+
+            utils::write_log_to(m_name + ".log", m_log);
+
+/*
+
             if (ae->prev_log_index <= 0) {
                 so_5::send<raft_server::AppendEntryResult>(std::get<0>(m_mboxes[m_curr_leader]), m_name, m_term, true);
             } else if (ae->prev_log_index-1 > ((int)m_log.size())-1) {
@@ -261,7 +317,7 @@ private:
             } else
                 so_5::send<raft_server::AppendEntryResult>(std::get<0>(m_mboxes[m_curr_leader]), m_name, m_term, false);
 
-
+*/
             follower.time_limit(std::chrono::milliseconds{m_election_timeout}, candidate);
         } else if (ae->term < m_term) { //receiver implementation #1
             so_5::send<raft_server::AppendEntryResult>(std::get<0>(m_mboxes[m_curr_leader]), m_name, m_term, false);
@@ -299,10 +355,12 @@ private:
     void leader_client_request_handler(mhood_t<ClientRequest> cr) {
         std::cout << "youre right im the leader" << std::endl;
 
-        m_log.push_back(std::tuple<int,std::string>(m_term, cr->cmd));
+        if ((cr->cmd).size() != 0) {
+            m_log.push_back(std::tuple<int,std::string>(m_term, cr->cmd));
 
-        utils::write_log_to(m_name + ".log", m_log);
-        m_register.parse(cr->cmd);
+            utils::write_log_to(m_name + ".log", m_log);
+            m_register.parse(cr->cmd);
+        }
 
         so_5::send<ServerResponse>(cr->inbox, 1, m_register.get_result(), m_name);
         
