@@ -8,12 +8,12 @@ Der einzige Weg herauszufinden wie etwas funktioniert war es in einem Beispiel a
 
 \section{Funktionen}
 
-\subsection{so\_5::launch(\textit{so\_5::environment\_t\&})}
+\subsection{so\_5::launch(\textit{[](so\_5::environment\_t\&)\{\})}}
 Diese Funktion ist essentiell für die Verwaltung von Agents. Prinzipiell wird nur ein Argument übernommen.
 Dieses ist eine Funktion welche eine so\_5::environment\_t Instanz verwaltet. Auf Basis dieser Instanz werden
 die Agents angelegt und verwaltet. Erst wenn diese Umgebung beendet wird wird die launch-Funktion beendet.
 
-\subsection{introduce\_coop(\textit{so\_5::coop\_t\&})}
+\subsection{introduce\_coop(\textit{[](so\_5::coop\_t\&)\{\})}}
 introduce\_coop() ist eine Member-Function von so\_5::environment\_t. Diese Funktion wird in der Dokumentation von
 SObjectizer nicht erklärt. Sie wird einfach als Code-Snippet als notwendiges Übel bereitgestellt. Der einzige
 Parameter ist wieder wie in so\_5::launch() eine Funktion welche sich wiederum um das eigentliche Anlegen der
@@ -35,6 +35,95 @@ Der erste Parameter ist immer die Inbox des Agents den man ansprechen möchte. A
 dazu genutzt die Klasse zu bilden. Die Funktion kann sowohl innerhalb von launch als auch in diversen Agents
 verwendet werden. Mithilfe dieser Funktion wird die Kommunikation der Agents ermöglicht. Die Klasse wird als
 ''Brief'' verwendet.
+
+\subsection{on\_enter(\textit{Funktion})}
+Diese Funktion kann in Kombination von States verwendet werden. Wenn der State eines Agent zum spezifizierten State
+geändert wird, wird sofort der Code aus der übergebenen Funktion ausgeführt. Das kann benutzt werden um Variablen zu
+initialisieren oder um anderen Agents mitzuteilen, dass sich dieser jetzt in jenem State befindet.
+
+\begin{minted}{c++}
+class test final : public so_5::agent_t{
+public:
+
+  void so_define_agent() override {
+  
+    off.on_enter([this]{
+      cout << "Dieser Agent ist gerade inaktiv geworden!!!" << endl;
+    });
+    
+    on.on_enter([this]{
+      cout << "Dieser Agent ist gerade aktiv geworden!!!" << endl;
+    });
+  
+  }
+
+private:
+  state_t server_state,
+  on{substate_of(server_state)},
+  off{initial_substate_of(server_state)};
+}
+\end{minted}
+
+Als Eklärung: ''so\_define\_agent()'' ist eine Funktion, mit welcher das Verhalten eines
+Agents definiert wird. Diese Funktion ist von der Parent-Class ''agent\_t'' vererbt worden
+und muss überschrieben werden.
+
+\subsection{on\_exit(\textit{Funktion})}
+Ist das Gegenstück zu ''on\_enter'' und wird aufgerufen wenn der State verlassen wird und kann somit als Destruktor
+gesehen werden.
+
+\begin{minted}{c++}
+class test final : public so_5::agent_t{
+public:
+
+  void so_define_agent() override {
+  
+    off.on_exit([this]{
+      cout << "Dieser Agent ist gerade dabei in den Dienst zu wechseln!!!" << endl;
+    });
+    
+    on.on_exit([this]{
+      cout << "Dieser Agent beendet gerade seinen Dienst!!!" << endl;
+    });
+  
+  }
+
+private:
+  state_t server_state,
+  on{substate_of(server_state)},
+  off{initial_substate_of(server_state)};
+}
+\end{minted}
+
+\subsection{event(\textit{Funktion})}
+Events bilden das Herzstück von SObjectizer-States. Wenn ein Element in der Inbox ankommt was
+mit dem Typ übereinstimmt, welches die übergebene Funktion als Parameter besitzt wird dieses Event
+aktiviert.
+
+\begin{minted}{c++}
+
+struct msg_container {
+  int sender_id;
+  string msg;
+}
+
+class test final : public so_5::agent_t{
+public:
+
+  void so_define_agent() override {
+  
+    server_state.event(&event_handler);
+  
+  }
+
+private:
+  state_t server_state,
+  
+  void event_handler(mhood_t<msg_container> msg_c) {
+    cout << "Nachricht von " << msg_c->sender_id << ": " << msg_c->msg << endl;
+  }
+}
+\end{minted}
 
 \section{Typen/Klassen}
 
@@ -71,5 +160,3 @@ off{initial_substate_of(server_state)};
 \end{minted}
 Der Unterschied zwischen diesen beiden Funktionen ist, dass bei ''initial\_substate\_of()'' der erstellte State
 derjenige ist, in welchem sich der Agent initial befindet.
-
-
