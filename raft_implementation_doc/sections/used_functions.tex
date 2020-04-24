@@ -2,3 +2,24 @@
 
 \vspace{10mm}
 
+SObjectizer besitzt an sich eigentlich eine Dokumentation. Leider ist diese
+nicht sonderlich detailreich und in manchen Fällen auch nicht aufschlussreich.
+Der einzige Weg herauszufinden wie etwas funktioniert war es in einem Beispiel auszuprobieren.
+
+\section{Funktionen}
+
+\subsection{so\_5::launch()}
+Diese Funktion ist essentiell für die Verwaltung von Agents. Prinzipiell wird nur ein Argument übernommen.
+Dieses ist eine Funktion welche eine so\_5::environment\_t Instanz verwaltet. Auf Basis dieser Instanz werden
+die Agents angelegt und verwaltet. Erst wenn diese Umgebung beendet wird wird die launch-Funktion beendet.
+
+\subsection{introduce\_coop()}
+introduce\_coop() ist eine Member-Function von so\_5::environment\_t. Diese Funktion wird in der Dokumentation von
+SObjectizer nicht erklärt. Sie wird einfach als Code-Snippet als notwendiges Übel bereitgestellt. Der einzige
+Parameter ist wieder wie in so\_5::launch() eine Funktion welche sich wiederum um das eigentliche Anlegen der
+Agents kümmert.
+
+\section{Typen/Klassen}
+
+\subsection{so\_5::mbox\_t}
+Dieser Typ ist die eigentliche Inbox/Adresse mithilfe der sich die Agents untereinander verständigen.
