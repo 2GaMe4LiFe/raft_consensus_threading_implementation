@@ -123,3 +123,10 @@ struct hinzugefügt, welches das Prozedere vereinfachen sollte.
 Heartbeats werden vom leader in einem Thread ausgeführt, welcher vom Hauptprogramm getrennt wird(detached). Mithilfe einer
 Variable kann die darin enthaltene Loop angehalten werden. In der Loop selbst werden in einem bestimmten Zeitraum immer wieder
 ''AppendEntries'' als Heartbeat ausgesand, damit die follower kein Timeout erleben.
+\newline
+Auf diese AppendEntries wird mit AppendEntryResults geantwortet. Das Attribut ''success'' gibt dabei an ob das Log des followers aktuell ist oder nicht.
+
+\section{Client}
+Der Client ist ein verkomplizierter Klon des LED-Beispiels in der SObjectizer-Dokumentation.  Nach einer bestimmten Zeit wird zwishen zwei
+States gewechselt. In dem einen wird ein Request an das Cluster gesendet, wohingegen der andere State einfach nur eine Zeit lang wartet.
+Das Ergebnis welches vom Cluster erhaltern wird, wird derzeit einfach in der Konsole ausgegeben.

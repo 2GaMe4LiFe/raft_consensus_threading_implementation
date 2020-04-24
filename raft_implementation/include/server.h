@@ -148,15 +148,10 @@ public:
             m_is_leader = true;
             m_vote_cnt = 0;
             m_heartbeat_mtx.lock();
-            std::cout << m_name << ": "<< m_log.size() << std::endl;
+            std::cout << "Logsize " << m_name << ": "<< m_log.size() << std::endl;
             for (auto el : m_mboxes) {
                 m_mboxes[el.first] = std::tuple<so_5::mbox_t,int>(std::get<0>(el.second), m_log.size());
                 std::cout << "set " << el.first << " to " << m_log.size() << std::endl;
-                std::cout << std::get<1>(el.second) << std::endl;
-            }
-
-            for (auto el : m_mboxes) {
-                std::cout << std::get<1>(el.second) << std::endl;
             }
 
             so_5::send<raft_server::change_state>(*this);
@@ -209,13 +204,11 @@ private:
 
     void send_request_vote() {
         while (m_is_candidate) {
-            std::cout << "thread is running..." << std::endl;
             for (auto el : m_mboxes) {
                 if (m_log.size() != 0)
                     so_5::send<raft_server::RequestVote>(std::get<0>(el.second), m_term, m_name,
                         m_log.size(), std::get<0>(m_log[m_log.size()-1]));
                 else {
-                    std::cout << "#fail" << std::endl;
                     so_5::send<raft_server::RequestVote>(std::get<0>(el.second), m_term, m_name,
                         m_log.size(), 0);
                 }
@@ -235,13 +228,6 @@ private:
                         for (int i{std::get<1>(el.second)}; i < m_log.size(); i++) {
                             payload.push_back(m_log[i]);
                         }
-                        
-                        /*std::cout << "HEARTBEAT: "
-                            << el.first << " "
-                            << m_log.size() << " "
-                            << std::get<1>(el.second) << " "
-                            << std::get<0>(m_log[std::get<1>(el.second)-1])
-                            << std::endl;*/
 
                         so_5::send<raft_server::AppendEntry>(std::get<0>(el.second), m_term, m_name,
                             std::get<1>(el.second), std::get<0>(m_log[std::get<1>(el.second)-1]), payload, m_commit_index);
@@ -253,7 +239,6 @@ private:
             std::this_thread::sleep_for(std::chrono::milliseconds{50});
         }
         m_heartbeat_mtx.unlock();
-        std::cout << "ended heartbeat" << std::endl;
     }
 
     void consistency_check(mhood_t<raft_server::AppendEntryResult> aer) {
