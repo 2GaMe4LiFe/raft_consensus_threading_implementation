@@ -262,9 +262,6 @@ private:
             if (std::get<1>(m_mboxes[aer->follower_name])-1 >= 0) {//nextIndex
                 std::vector<std::tuple<int,std::string>> empty_v;
                 std::get<1>(m_mboxes[aer->follower_name])--;
-                /*so_5::send<raft_server::AppendEntry>(std::get<0>(m_mboxes[aer->follower_name]), m_term, m_name,
-                            std::get<1>(m_mboxes[aer->follower_name]),
-                            std::get<0>(m_log[std::get<1>(m_mboxes[aer->follower_name])]), empty_v, m_commit_index);*/
             }
         } else {
             //std::cout << "DEBUG++: " << std::get<1>(m_mboxes[aer->follower_name]) << " " << m_log.size() << std::endl;
@@ -275,10 +272,6 @@ private:
             }
 
             if (std::get<1>(m_mboxes[aer->follower_name]) < m_log.size()) {
-                /*so_5::send<raft_server::AppendEntry>(std::get<0>(m_mboxes[aer->follower_name]), m_term, m_name,
-                                m_log.size(),
-                                std::get<0>(m_log[std::get<1>(m_mboxes[aer->follower_name])]), payload, m_commit_index);*/
-
                 std::get<1>(m_mboxes[aer->follower_name]) = m_log.size();
             }
         }
@@ -313,20 +306,6 @@ private:
 
             utils::write_log_to(m_name + ".log", m_log);
 
-/*
-
-            if (ae->prev_log_index <= 0) {
-                so_5::send<raft_server::AppendEntryResult>(std::get<0>(m_mboxes[m_curr_leader]), m_name, m_term, true);
-            } else if (ae->prev_log_index-1 > ((int)m_log.size())-1) {
-                so_5::send<raft_server::AppendEntryResult>(std::get<0>(m_mboxes[m_curr_leader]), m_name, m_term, false);
-            } else if (std::get<0>(m_log[ae->prev_log_index-1]) == ae->prev_log_term) {
-                so_5::send<raft_server::AppendEntryResult>(std::get<0>(m_mboxes[m_curr_leader]), m_name, m_term, true);
-            } else if (ae->prev_log_index == m_last_applied) {
-                so_5::send<raft_server::AppendEntryResult>(std::get<0>(m_mboxes[m_curr_leader]), m_name, m_term, true);
-            } else
-                so_5::send<raft_server::AppendEntryResult>(std::get<0>(m_mboxes[m_curr_leader]), m_name, m_term, false);
-
-*/
             follower.time_limit(std::chrono::milliseconds{m_election_timeout}, candidate);
         } else if (ae->term < m_term) { //receiver implementation #1
             so_5::send<raft_server::AppendEntryResult>(std::get<0>(m_mboxes[m_curr_leader]), m_name, m_term, false);

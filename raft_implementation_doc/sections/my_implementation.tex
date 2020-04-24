@@ -1,0 +1,125 @@
+\chapter{Meine Raft-Implementation}
+
+\vspace{10mm}
+
+\section{Server}
+Wie es in Raft üblich ist bestehen meine ''Server'' aus drei States: leader, follower und candidate.
+zusätzlich gibt es einen vierten State, welcher den Ausfall eines Servers simulieren soll.
+
+\begin{minted}{c++}
+state_t server_state{this},
+candidate{substate_of(server_state)},
+follower{initial_substate_of(server_state)},
+leader{substate_of(server_state)},
+inactive{substate_of(server_state)};
+\end{minted}
+
+Für den eigentlichen Nachrichtenaustausch wurden verschiedene Klassen als Container definiert.
+
+\subsection{ClientRequest}
+\begin{minted}{c++}
+    struct ClientRequest {
+        so_5::mbox_t inbox;
+        std::string cmd;
+    };
+\end{minted}
+Der ClientRequest wird vom Client an einen Server geschickt. Dieser Request enthält die Information
+wohin der Response geschickt werden muss: ''inbox''. Für die Serverseite nicht weniger wichtig ist
+aber das Attribut ''cmd'', welches den Befehl enthält, welcher von diesem verarbeitet werden soll.
+
+\subsection{ServerResponse}
+\begin{minted}{c++}
+    struct ServerResponse {
+        int status; // 0 or 1 if 0 then request answered by follower
+        std::string resp;
+        std::string leader;
+    };
+\end{minted}
+Der Serverresponse ist das Gegenstück zum ClientRequest. Der Server sendet diesen mit den  Informationen
+wer den Response gesendet hat, was das Ergebnis der Verarbeitung ist und wer der derzeitige Leader des 
+Clusters ist mit. Die Information über den Leader ist deswegen wichtig, da der Client beim ersten Request
+eine Anfrage an einen zufälligen Server im Cluster sendet, welcher dann den Client über den derzeitigen
+Leader informieren muss. Um zwischen dem Response eines Leaders und eines Followers zu unterscheiden gibt
+es das Attribut ''status''.
+
+\subsection{SetCluster}
+\begin{minted}{c++}
+    struct SetCluster {
+        std::unordered_map<std::string, so_5::mbox_t> mboxes;
+    };
+\end{minted}
+Diese Nachricht ist dafür zuständig die einzelnen Teilnehmer und den Client darüber zu informieren, welcher
+Server wie zu erreichen ist und stellt somit den Beginn des Algorithmus dar.
+
+\subsection{deactivate}
+\begin{minted}{c++}
+    struct deactivate : public so_5::signal_t{};
+\end{minted}
+''deactivate'' ist ein Signal, welches den Server einfach nur in einen extrigen State ''inactive'' versetzt oder herausholt,
+je nach dem ob der server sich gerade in diesem befindet. Dieser State simuliert den Ausfall eines Servers.
+
+\subsection{RequestVote}
+\begin{minted}{c++}
+    struct RequestVote {
+
+        RequestVote(int term_, bool vote_granted_) : term{term_},
+        vote_granted{vote_granted_} {}
+
+        RequestVote(int term_, std::string candidate_id_, int lli_, int llt_)
+        : term{term_}, candidate_id{candidate_id_}, last_log_index{lli_},
+        last_log_term{llt_}, vote_granted{false} {}
+
+        int term;
+        std::string candidate_id;
+        int last_log_index;
+        int last_log_term;
+
+        bool vote_granted;
+    };
+\end{minted}
+Dieses struct ist so aufgebaut wie es im Raft-Paper spezifiziert ist. Diese Nachricht wird nur aus dem
+candidate-State verschickt. Wenn mehr als die hälfte der im Cluster befindlichen Server mit einem positiven ''vote\_granted''
+wird der Server vom candidate- in den leader-State versetzt.
+
+\subsection{AppendEntry}
+\begin{minted}{c++}
+    struct AppendEntry {
+        
+        AppendEntry(int term_, bool success_) : term{term_},
+        success{success_} {};
+
+        AppendEntry(int term_, std::string leader_id_, int prev_log_index_,
+        int prev_log_term_, std::vector<std::tuple<int,std::string>> entries_,
+        int leader_commit_) : term{term_}, leader_id{leader_id_},
+        prev_log_index{prev_log_index_}, prev_log_term{prev_log_term_},
+        entries{entries_}, leader_commit{leader_commit_} {}
+        
+        int term;
+        std::string leader_id;
+        int prev_log_index;
+        int prev_log_term;
+        std::vector<std::tuple<int,std::string>> entries;
+        int leader_commit;
+        bool success;
+    };
+\end{minted}
+AppendEntry ist ebenfalls so aufgebaut wie es im Raft-Paper spezifiziert wurde. Da es aber Probleme bei der
+Umsetzung gab musste eine zusätzlicher Nachricht ''AppendEntryResult'' hinzugefügt werden. ''AppendEntry'' dient nicht
+nur dazu das Log des leaders zu verteilen sondern auch dazu die follower davon abzuhalten ein Timeout zu erfahren.
+Für diesen ''Heartbeat'' wird das Attribut ''entries'' leergelassen.
+
+\subsection{AppendEntryResult}
+\begin{minted}{c++}
+    struct AppendEntryResult {
+        std::string follower_name;
+        int term;
+        bool success;
+    };
+\end{minted}
+Wie bereits oben erwähnt gab es Probleme bei der implementierung der Antwort auf AppendEntry-Nachrichten. Deshalb wurde ein
+struct hinzugefügt, welches das Prozedere vereinfachen sollte.
+
+\subsection{Heartbeats}
+Heartbeats werden vom leader in einem Thread ausgeführt, welcher vom Hauptprogramm getrennt wird(detached). Mithilfe einer
+Variable kann die darin enthaltene Loop angehalten werden. In der Loop selbst werden in einem bestimmten Zeitraum immer wieder
+''AppendEntries'' als Heartbeat ausgesand, damit die follower kein Timeout erleben.
