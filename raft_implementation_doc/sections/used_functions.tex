@@ -125,6 +125,40 @@ private:
 }
 \end{minted}
 
+\subsection{time\_limit(\textit{chrono::milliseconds}, \textit{state\_t}}
+Diese Funktion ist wieder den States vorbehalten. Sie steuert den Übergang nach einer gewissen Zeit von einem Zustand in den anderen.
+Wird time\_limit innerhalb des definierten Zeitintervalls nochmals im selben State aufgerufen wird der vorhergehende Aufruf ''aufgehoben''/
+''aktualisiert''.
+
+\begin{minted}{c++}
+class test final : public so_5::agent_t{
+public:
+
+  void so_define_agent() override {
+  
+    off.on_exit([this]{
+      cout << "Dieser Agent ist gerade dabei in den Dienst zu wechseln!!!" << endl;
+    });
+    
+    on.on_exit([this]{
+      cout << "Dieser Agent beendet gerade seinen Dienst!!!" << endl;
+    });
+    
+    //sorgt dafür das von State on nach 100ms in State off gewechselt wird
+    on.time_limit(chrono::milliseconds{100}, off);
+    
+    //hier ist das Gegenteil der Fall -> Fertig ist der Ping-Pong-Agent
+    off.time_limit(chrono::milliseconds{100}, on);
+  
+  }
+
+private:
+  state_t server_state,
+  on{substate_of(server_state)},
+  off{initial_substate_of(server_state)};
+}
+\end{minted}
+
 \section{Typen/Klassen}
 
 \subsection{so\_5::environment\_t}
