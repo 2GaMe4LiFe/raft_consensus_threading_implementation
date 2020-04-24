@@ -23,4 +23,19 @@ Nun sollten sich in einem neu erstellten target-Folder zwei Ordner befinden. Ein
 lib. In dem lib-Folder befinden sich die kompilierte Static- und Dynamic-Library. Im include-Folder können
 alle notwendigen header-Files gefunden werden.
 
+\newpage
+
 \section{Setup zum Verwenden des Projekts}
+Um das Projekt verwenden zu können muss ersteinmal die richtige Arbeitsumgebung geschaffen werden.
+Dafür muss folgendes gemacht werden:
+
+\begin{itemize}
+  \item Kompilieren wie oben beschrieben
+  \item Shared Library in /usr/lib verschieben
+  \item Ordner so\_5 in /usr/lib anlegen
+  \item Den Ordner so\_5 aus target/include in /usr/lib/so\_5 verschieben
+\end{itemize}
+
+Meson kann leider mit der find\_library-Funktion keine relativen Pfade verwenden weshalb dieser Umweg notwendig
+ist. Ein Pfad der bei jedem Linux-User gleich ist ist nunmal /usr/lib.
+

@@ -137,8 +137,13 @@ public:
             m_vote_cnt = 0;
             so_5::send<raft_server::change_state>(*this);
 
+            for (auto el : m_mboxes) {
+                std::get<1>(el.second) = m_log.size();
+            }
+
             m_heartbeat_thread = std::thread([this]{send_heartbeat();});
             m_heartbeat_thread.detach();
+            leader.time_limit(std::chrono::milliseconds{10000}, follower);
         })
         .event([this](mhood_t<raft_server::change_state>) {
             std::cout << m_name << ": leader" << std::endl;
@@ -224,8 +229,6 @@ private:
 
             std::vector<std::tuple<int,std::string>> payload;
 
-            std::cout << "DEBUG: " << std::get<1>(m_mboxes[aer->follower_name]) << " " << m_log.size() << std::endl;
-
             for (int i{std::get<1>(m_mboxes[aer->follower_name])}; i < m_log.size(); i++) {
                 payload.push_back(m_log[i]);
             }
@@ -250,9 +253,8 @@ private:
             if (ae->prev_log_index <= 0) {
                 so_5::send<raft_server::AppendEntryResult>(std::get<0>(m_mboxes[m_curr_leader]), m_name, m_term, true);
             } else if (ae->prev_log_index-1 > ((int)m_log.size())-1) {
-                std::cout << "win" << std::endl;
                 so_5::send<raft_server::AppendEntryResult>(std::get<0>(m_mboxes[m_curr_leader]), m_name, m_term, false);
-            } else if (std::get<0>(m_log[ae->prev_log_index]) == ae->prev_log_term) {
+            } else if (std::get<0>(m_log[ae->prev_log_index-1]) == ae->prev_log_term) {
                 so_5::send<raft_server::AppendEntryResult>(std::get<0>(m_mboxes[m_curr_leader]), m_name, m_term, true);
             } else if (ae->prev_log_index == m_last_applied) {
                 so_5::send<raft_server::AppendEntryResult>(std::get<0>(m_mboxes[m_curr_leader]), m_name, m_term, true);
@@ -265,8 +267,8 @@ private:
             so_5::send<raft_server::AppendEntryResult>(std::get<0>(m_mboxes[m_curr_leader]), m_name, m_term, false);
         } else if (ae->term >= m_term) {
             for (auto el : ae->entries) {
-                std::cout << m_name << ": " << std::get<1>(el) << std::endl;
                 m_log.push_back(el);
+                m_register.parse(std::get<1>(el));
             }
 
             m_last_applied = m_log.size();
@@ -299,6 +301,7 @@ private:
 
         m_log.push_back(std::tuple<int,std::string>(m_term, cr->cmd));
 
+        utils::write_log_to(m_name + ".log", m_log);
         m_register.parse(cr->cmd);
 
         so_5::send<ServerResponse>(cr->inbox, 1, m_register.get_result(), m_name);
