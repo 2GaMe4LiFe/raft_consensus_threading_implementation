@@ -8,18 +8,68 @@ Der einzige Weg herauszufinden wie etwas funktioniert war es in einem Beispiel a
 
 \section{Funktionen}
 
-\subsection{so\_5::launch()}
+\subsection{so\_5::launch(\textit{so\_5::environment\_t\&})}
 Diese Funktion ist essentiell für die Verwaltung von Agents. Prinzipiell wird nur ein Argument übernommen.
 Dieses ist eine Funktion welche eine so\_5::environment\_t Instanz verwaltet. Auf Basis dieser Instanz werden
 die Agents angelegt und verwaltet. Erst wenn diese Umgebung beendet wird wird die launch-Funktion beendet.
 
-\subsection{introduce\_coop()}
+\subsection{introduce\_coop(\textit{so\_5::coop\_t\&})}
 introduce\_coop() ist eine Member-Function von so\_5::environment\_t. Diese Funktion wird in der Dokumentation von
 SObjectizer nicht erklärt. Sie wird einfach als Code-Snippet als notwendiges Übel bereitgestellt. Der einzige
 Parameter ist wieder wie in so\_5::launch() eine Funktion welche sich wiederum um das eigentliche Anlegen der
-Agents kümmert.
+Agents kümmert. Der Parameter der übergebenen Funktion ist ein so\_5::coop\_t Objekt.
+
+\subsection{make\_agent$<$\textit{Klasse}$>$(\textit{Paramliste des Konstruktors der Klasse})}
+Die verwendete Klasse muss immer von so\_5::agent\_t abgeleitet sein um make\_agent verwenden zu können.
+Es wird ein Zeiger auf die Klasse angelegt. Der einfachste Weg das Resultat zu speichern ist ''auto'' zu
+verwenden.
+
+\subsection{so\_direct\_mbox()}
+Im Kontext zu meinem Programm ist dies die wichtigste Funktion. Mit ihr wird die Inbox des erstellten Agents
+zurückgeliefert. Mithilfe dieser können wie bereits erwähnt die einzelnen Agents miteinander Kommunizieren.
+Wenn der Agent mittels make\_agent aufgerufen wurde ist es notwendig darauf zu achten, dass das erstellte Objekt
+ein Pointer ist.
+
+\subsection{so\_5::send$<$\textit{Klasse/Struct}$>$(so\_5::mbox\_t, \textit{Paramliste des Konstruktors der Klasse})}
+Der erste Parameter ist immer die Inbox des Agents den man ansprechen möchte. Alle weiteren Parameter werden
+dazu genutzt die Klasse zu bilden. Die Funktion kann sowohl innerhalb von launch als auch in diversen Agents
+verwendet werden. Mithilfe dieser Funktion wird die Kommunikation der Agents ermöglicht. Die Klasse wird als
+''Brief'' verwendet.
 
 \section{Typen/Klassen}
 
+\subsection{so\_5::environment\_t}
+Stellt die Umgebung bereit in welcher die Agents agieren können.
+
+\subsection{so\_5::coop\_t}
+so\_5::coop\_t stellt den Kontext bereit, mithilfe dessen Agents erstellt werden können.
+
 \subsection{so\_5::mbox\_t}
 Dieser Typ ist die eigentliche Inbox/Adresse mithilfe der sich die Agents untereinander verständigen.
+
+\subsection{so\_5::agent\_t}
+Von dieser Klasse muss geerbt werden, wenn ein Agent erstellt werden soll.
+
+\subsection{so\_5::signal\_t}
+Ist ein vereinfachtes struct welches ohne Parameter abeschickt werden kann. Wie der Name bereits sagt können
+zwischen Agents Signale herumgeschickt werden, welche für Events als Indikator dienen können.
+
+\subsection{state\_t}
+Das Actor-Modell für welches SObjectizer ein Framework ist kennt sogenannte States. Ein Agent verhält sich
+unterschiedlich je nach dem in welchem State er gerade ist.
+States können auf folgende weise erstellt werden:
+\begin{minted}{c++}
+state_t server_state{this};
+\end{minted}
+Dabei ist State eine Member-Variable der erstellten Agent-Klasse.
+Um das Event-Handling zu vereinfachen können States auch von States ''erben''.
+Das kann mit ''substate\_of()'' und ''initial\_substate\_of()'' erreicht werden.
+\begin{minted}{c++}
+state_t server_state{this},
+on{substate_of(server_state)},
+off{initial_substate_of(server_state)};
+\end{minted}
+Der Unterschied zwischen diesen beiden Funktionen ist, dass bei ''initial\_substate\_of()'' der erstellte State
+derjenige ist, in welchem sich der Agent initial befindet.
+
+
